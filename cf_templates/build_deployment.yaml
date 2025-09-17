@@ -61,9 +61,11 @@ Resources:
   SourceRepositoryAssociation:
     Type: AWS::CodeGuruReviewer::RepositoryAssociation
     Properties:
-      Name: !Sub "${GitHubRepositoryOwner}/${GitHubRepositoryName}"
+      Repository:
+        Name: !Ref GitHubRepositoryName
+        Owner: !Ref GitHubRepositoryOwner
+        ConnectionArn: !Ref GitHubConnection
       Type: GitHub
-      ConnectionArn: !Ref GitHubConnection
       BucketName: !Ref CodeGuruReviewerBucket
 
   MyProfilingGroup:
