@@ -55,7 +55,7 @@ Resources:
   GitHubConnection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
-      ConnectionName: !Sub "${AWS::StackName}-github-connection"
+      ConnectionName: !Sub "${AWS::StackName}-github"
       ProviderType: GitHub
 
   SourceRepositoryAssociation:
