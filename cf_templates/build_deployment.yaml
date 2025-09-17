@@ -286,7 +286,7 @@ Resources:
   CodeGuruReviewerBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub codeguru-reviewer-cli-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub codeguru-reviewer-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}
       PublicAccessBlockConfiguration:
         IgnorePublicAcls: true
         BlockPublicAcls: true
