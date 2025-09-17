@@ -58,15 +58,7 @@ Resources:
       ConnectionName: !Sub "${AWS::StackName}-github"
       ProviderType: GitHub
 
-  SourceRepositoryAssociation:
-    Type: AWS::CodeGuruReviewer::RepositoryAssociation
-    Properties:
-      Repository:
-        Name: !Ref GitHubRepositoryName
-        Owner: !Ref GitHubRepositoryOwner
-        ConnectionArn: !Ref GitHubConnection
-      Type: GitHub
-      BucketName: !Ref CodeGuruReviewerBucket
+
 
   MyProfilingGroup:
     Type: AWS::CodeGuruProfiler::ProfilingGroup
@@ -444,14 +436,7 @@ Resources:
                   - codebuild:BatchGetBuilds
                   - codebuild:BatchGetBuildBatches
                   - codebuild:StartBuildBatch
-              - Resource: !GetAtt SourceRepositoryAssociation.AssociationArn
-                Effect: Allow
-                Action:
-                  - codeguru-reviewer:List*
-                  - codeguru-reviewer:Describe*
-                  - codeguru-reviewer:Get*
-                  - codeguru:Get*
-                  - codeguru-reviewer:CreateCodeReview
+
               - Resource: !Sub arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EcrDockerRepository}
                 Effect: Allow
                 Action:
@@ -551,9 +536,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - codeguru-reviewer:AssociateRepository
-              - Resource: 
-                  - !GetAtt SourceRepositoryAssociation.AssociationArn
-                  - !Sub arn:${AWS::Partition}:codeguru-reviewer:${AWS::Region}:${AWS::AccountId}:*
+              - Resource: !Sub arn:${AWS::Partition}:codeguru-reviewer:${AWS::Region}:${AWS::AccountId}:*
                 Effect: Allow
                 Action:
                   - codeguru-reviewer:List*
