@@ -1,0 +1,98 @@
+Description: >
+  CloudFormation template for creating GitHub integration parameters and ECR repository to store cicd java eks code.
+  This template replaces the CodeCommit repository creation with GitHub repository configuration.
+
+Parameters:
+  GitHubRepositoryOwner:
+    Type: String
+    Description: GitHub repository owner (username or organization)
+    Default: aws-samples
+  GitHubRepositoryName:
+    Type: String
+    Description: Name of the GitHub repository
+    Default: aws-codepipeline-devsecops-amazoneks
+  GitHubBranchName:
+    Type: String
+    Default: main
+    Description: Default Branch
+  GitHubOAuthToken:
+    Type: String
+    Description: GitHub OAuth token for repository access (will be stored in Secrets Manager)
+    NoEcho: true
+  ECRRepositoryName:
+    Type: String
+    Description: Name of ECR repo to be created
+
+Resources:
+  # Store GitHub OAuth token in AWS Secrets Manager
+  GitHubOAuthSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}-github-oauth-token"
+      Description: GitHub OAuth token for CodePipeline integration
+      SecretString: !Sub |
+        {
+          "token": "${GitHubOAuthToken}"
+        }
+
+  # ECR Repository (unchanged from original)
+  DockerRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: "KMS"
+      LifecyclePolicy: 
+       LifecyclePolicyText: |
+         {
+            "rules": [
+                {
+                   "rulePriority": 2,
+                   "description": "Expire images older than 14 days",
+                   "selection": {
+                       "tagStatus": "any",
+                       "countType": "sinceImagePushed",
+                       "countUnit": "days",
+                       "countNumber": 14
+                    },
+                    "action": {
+                        "type": "expire"
+                    }
+                },
+                {
+                   "rulePriority": 1,
+                   "description": "Keep only one untagged image, expire all others",
+                   "selection": {
+                       "tagStatus": "untagged",
+                       "countType": "imageCountMoreThan",
+                       "countNumber": 1
+                   },
+                   "action": {
+                       "type": "expire"
+                   }
+                }
+           ]
+         }
+      
+      RepositoryName: !Ref ECRRepositoryName
+
+Outputs:
+  GitHubRepositoryUrl:
+    Description: GitHub repository URL
+    Value: !Sub "https://github.com/${GitHubRepositoryOwner}/${GitHubRepositoryName}"
+  GitHubOAuthSecretArn:
+    Description: ARN of the GitHub OAuth token secret
+    Value: !Ref GitHubOAuthSecret
+  GitHubRepositoryOwner:
+    Description: GitHub repository owner
+    Value: !Ref GitHubRepositoryOwner
+  GitHubRepositoryName:
+    Description: GitHub repository name
+    Value: !Ref GitHubRepositoryName
+  GitHubBranchName:
+    Description: GitHub branch name
+    Value: !Ref GitHubBranchName
+  ECRUrl:
+    Value: !Sub https://console.aws.amazon.com/ecr/repositories/private/${AWS::AccountId}/${DockerRepo}?region=${AWS::Region}

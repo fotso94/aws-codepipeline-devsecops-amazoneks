@@ -1,16 +1,22 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: CFN Template to deploy CodePipeline to build Docker Image of java application and push to ECR and deploy to EKS following DevSecOps Practices
+Description: CFN Template to deploy CodePipeline to build Docker Image of java application and push to ECR and deploy to EKS following DevSecOps Practices with GitHub integration
 
 Parameters:
-  SourceRepoName:
+  GitHubRepositoryOwner:
     Type: String
-    Description: AWS CodeCommit RepoName where code resides
-  CodeBranchName:
+    Description: GitHub repository owner (username or organization)
+  GitHubRepositoryName:
+    Type: String
+    Description: GitHub repository name
+  GitHubBranchName:
     Type: String
     Default: main
     Description: Branch Name
+  GitHubOAuthSecretArn:
+    Type: String
+    Description: ARN of the AWS Secrets Manager secret containing GitHub OAuth token
   EKSClusterName:
     Type: String
     Description: EKS Cluster Name (Not EKS Cluster ID)
@@ -45,11 +51,19 @@ Resources:
         Name: MySecurityHub
         Purpose: Security
 
+  # GitHub connection for CodeStar Connections
+  GitHubConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName: !Sub "${AWS::StackName}-github-connection"
+      ProviderType: GitHub
+
   SourceRepositoryAssociation:
     Type: AWS::CodeGuruReviewer::RepositoryAssociation
     Properties:
-      Name: !Ref SourceRepoName
-      Type: CodeCommit
+      Name: !Sub "${GitHubRepositoryOwner}/${GitHubRepositoryName}"
+      Type: GitHub
+      ConnectionArn: !Ref GitHubConnection
       BucketName: !Ref CodeGuruReviewerBucket
 
   MyProfilingGroup:
@@ -245,7 +259,7 @@ Resources:
                  "awsAccount": <account>,
                  "awsRegion": <region>
               }
-    DependsOn: [ "CodePipelineCodeCommit" ]
+    DependsOn: [ "CodePipelineGitHub" ]
 
   CodePipelineArtifactBucket:
     Type: AWS::S3::Bucket
@@ -408,16 +422,16 @@ Resources:
           PolicyDocument:
             Version: 2012-10-17
             Statement:
-              - Resource: !Sub arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:${SourceRepoName}
+              # GitHub access via CodeStar Connections
+              - Resource: !Ref GitHubConnection
                 Effect: Allow
                 Action:
-                  - codecommit:GetBranch
-                  - codecommit:GetCommit
-                  - codecommit:ListRepositories
-                  - codecommit:GetRepository
-                  - codecommit:UploadArchive
-                  - codecommit:GetUploadArchiveStatus
-                  - codecommit:CancelUploadArchive
+                  - codestar-connections:UseConnection
+              # Secrets Manager access for GitHub OAuth token
+              - Resource: !Ref GitHubOAuthSecretArn
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
               - Resource:
                   - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${CodeBuildImageProject}
                   - !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:project/${CodeDeployImageProject}
@@ -530,11 +544,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-              - Resource: !Sub arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:${SourceRepoName}
-                Effect: Allow
-                Action:
-                  - codecommit:GitPull
-                  - codecommit:TagResource
+
               - Resource: "*"
                 Effect: Allow
                 Action:
@@ -618,8 +628,6 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Source:
-        Location:
-          Fn::Sub: https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${SourceRepoName}
         Type: CODEPIPELINE
         BuildSpec: "buildspec/buildspec_secscan.yaml"
       TimeoutInMinutes: 30
@@ -649,8 +657,6 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Source:
-        Location:
-          Fn::Sub: https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${SourceRepoName}
         Type: CODEPIPELINE
         BuildSpec: "buildspec/buildspec.yml"
       TimeoutInMinutes: 30
@@ -680,8 +686,6 @@ Resources:
       Artifacts:
         Type: CODEPIPELINE
       Source:
-        Location:
-          Fn::Sub: https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${SourceRepoName}
         Type: CODEPIPELINE
         BuildSpec: "buildspec/buildspec_deploy.yml"
       TimeoutInMinutes: 30
@@ -711,7 +715,7 @@ Resources:
       ServiceRole:
         Fn::GetAtt: [ CodeBuildServiceRole, Arn ]
 
-  CodePipelineCodeCommit:
+  CodePipelineGitHub:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name:
@@ -729,12 +733,12 @@ Resources:
                 Category: Source
                 Owner: AWS
                 Version: 1
-                Provider: CodeCommit
+                Provider: CodeStarSourceConnection
               Configuration:
-                BranchName: !Ref CodeBranchName
+                ConnectionArn: !Ref GitHubConnection
+                FullRepositoryId: !Sub "${GitHubRepositoryOwner}/${GitHubRepositoryName}"
+                BranchName: !Ref GitHubBranchName
                 OutputArtifactFormat: CODEBUILD_CLONE_REF
-                RepositoryName:
-                  Ref: SourceRepoName
               OutputArtifacts:
                 - Name: SourceCodeApp
               RunOrder: 1
@@ -819,4 +823,4 @@ Outputs:
         - - "https://console.aws.amazon.com/codepipeline/home?region="
           - Ref: AWS::Region
           - "#/view/"
-          - Ref: CodePipelineCodeCommit
+          - Ref: CodePipelineGitHub
